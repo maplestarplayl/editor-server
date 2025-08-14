@@ -3,10 +3,10 @@ mod state;
 mod ws;
 
 use axum::{Router, routing::get};
-use tracing::{info, error};
-use tracing_subscriber::EnvFilter;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{net::TcpListener, sync::Mutex};
+use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
@@ -14,7 +14,7 @@ async fn main() {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    const SERVER_ADDRESS: ([u8; 4], u16) = ([0,0,0,0], 3000); //TODO: maybe should only listen container addr
+    const SERVER_ADDRESS: ([u8; 4], u16) = ([0, 0, 0, 0], 3000); //TODO: maybe should only listen container addr
 
     let state: Arc<Mutex<()>> = Arc::new(Mutex::new(()));
     let app = Router::new()

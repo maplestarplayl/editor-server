@@ -1,4 +1,6 @@
-use crate::rpc::error::{FILE_NOT_FOUND_CODE, INVALID_PARAMS_CODE, IO_ERROR_CODE, METHOD_NOT_FOUND_CODE};
+use crate::rpc::error::{
+    FILE_NOT_FOUND_CODE, INVALID_PARAMS_CODE, IO_ERROR_CODE, METHOD_NOT_FOUND_CODE,
+};
 
 use super::error::create_error_response;
 use super::request::{JsonRpcRequest, JsonRpcResponse};
@@ -43,7 +45,10 @@ impl HandlerError {
 }
 
 pub fn process_request(request: JsonRpcRequest) -> JsonRpcResponse {
-    info!("Processing request: method={}, id={:?}", request.method, request.id);
+    info!(
+        "Processing request: method={}, id={:?}",
+        request.method, request.id
+    );
 
     let id = request.id.unwrap_or(Value::Null);
 
@@ -52,7 +57,7 @@ pub fn process_request(request: JsonRpcRequest) -> JsonRpcResponse {
         "writeFile" => handle_write_file(request.params),
         _ => {
             warn!("Unknown method: {}", request.method);
-            return create_error_response(METHOD_NOT_FOUND_CODE, "Method not Found", id)
+            return create_error_response(METHOD_NOT_FOUND_CODE, "Method not Found", id);
         }
     };
 
@@ -65,13 +70,11 @@ pub fn process_request(request: JsonRpcRequest) -> JsonRpcResponse {
         },
         Err(e) => e.to_jsonrpc_error(id),
     }
-
-
 }
 
 fn handle_read_file(params: Value) -> Result<Value, HandlerError> {
-    let params: ReadFileParams = serde_json::from_value(params)
-        .map_err(|e| HandlerError::InvalidParams(e.to_string()))?;
+    let params: ReadFileParams =
+        serde_json::from_value(params).map_err(|e| HandlerError::InvalidParams(e.to_string()))?;
 
     let path = Path::new(&params.path);
 
@@ -79,25 +82,26 @@ fn handle_read_file(params: Value) -> Result<Value, HandlerError> {
         return Err(HandlerError::FileNotFound);
     }
 
-    let content = fs::read_to_string(path)
-        .map_err(HandlerError::IoError)?;
-    
+    let content = fs::read_to_string(path).map_err(HandlerError::IoError)?;
+
     info!("Successfully Read file {}: {}", params.path, content);
     Ok(Value::String(content))
 }
 
 fn handle_write_file(params: Value) -> Result<Value, HandlerError> {
-    let params: WriteFileParams = serde_json::from_value(params)
-        .map_err(|e| HandlerError::InvalidParams(e.to_string()))?;
+    let params: WriteFileParams =
+        serde_json::from_value(params).map_err(|e| HandlerError::InvalidParams(e.to_string()))?;
 
     let path = Path::new(&params.path);
 
-    let mut file = fs::File::create(path)
-        .map_err(HandlerError::IoError)?;
+    let mut file = fs::File::create(path).map_err(HandlerError::IoError)?;
 
     file.write_all(params.content.as_bytes())
         .map_err(HandlerError::IoError)?;
 
-    info!("Successfully wrote file {}: {}", params.path, params.content);
+    info!(
+        "Successfully wrote file {}: {}",
+        params.path, params.content
+    );
     Ok(Value::Bool(true))
 }
