@@ -14,7 +14,7 @@ async fn main() {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    const SERVER_ADDRESS: ([u8; 4], u16) = ([127, 0, 0, 1], 3000);
+    const SERVER_ADDRESS: ([u8; 4], u16) = ([0,0,0,0], 3000); //TODO: maybe should only listen container addr
 
     let state: Arc<Mutex<()>> = Arc::new(Mutex::new(()));
     let app = Router::new()
