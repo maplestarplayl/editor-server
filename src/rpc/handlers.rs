@@ -1,5 +1,6 @@
 use crate::rpc::error::{
-    FILE_NOT_FOUND_CODE, INVALID_PARAMS_CODE, IO_ERROR_CODE, METHOD_NOT_FOUND_CODE,
+    DIRECTORY_ERROR_CODE, FILE_NOT_FOUND_CODE, INVALID_PARAMS_CODE, IO_ERROR_CODE,
+    METHOD_NOT_FOUND_CODE,
 };
 
 use super::error::create_error_response;
@@ -19,10 +20,16 @@ struct WriteFileParams {
     content: String,
 }
 
+#[derive(Deserialize)]
+struct ListFilesParams {
+    path: String,
+}
+
 #[derive(Debug)]
 enum HandlerError {
     InvalidParams(String),
     FileNotFound,
+    DirectoryError(String),
     IoError(std::io::Error),
 }
 impl HandlerError {
@@ -35,6 +42,10 @@ impl HandlerError {
             HandlerError::FileNotFound => {
                 error!(error_type = "file_not_found", "Request failed");
                 create_error_response(FILE_NOT_FOUND_CODE, "File not found", id)
+            }
+            HandlerError::DirectoryError(msg) => {
+                error!(error_type = "directory_error", message = %msg, "Request failed");
+                create_error_response(DIRECTORY_ERROR_CODE, msg, id)
             }
             HandlerError::IoError(e) => {
                 error!(error_type = "io_error", error = %e, "Request failed");
@@ -72,6 +83,10 @@ pub fn process_request(request: JsonRpcRequest) -> JsonRpcResponse {
         "writeFile" => {
             debug!("Handling writeFile request");
             handle_write_file(request.params)
+        }
+        "listFiles" => {
+            debug!("Handling listFiles request");
+            handle_list_files(request.params)
         }
         _ => {
             warn!(method = %request.method, "Unknown method requested");
@@ -155,4 +170,82 @@ fn handle_write_file(params: Value) -> Result<Value, HandlerError> {
         "File written successfully"
     );
     Ok(Value::Bool(true))
+}
+
+fn handle_list_files(params: Value) -> Result<Value, HandlerError> {
+    let file_span = info_span!("list_files_operation");
+    let _enter = file_span.enter();
+
+    let params: ListFilesParams = serde_json::from_value(params).map_err(|e| {
+        debug!(error = %e, "Failed to deserialize list files parameters");
+        HandlerError::InvalidParams(e.to_string())
+    })?;
+
+    debug!(path = %params.path, "Listing files in directory");
+    let path = Path::new(&params.path);
+
+    if !path.exists() {
+        debug!(path = %params.path, "Directory does not exist");
+        return Err(HandlerError::DirectoryError(
+            "Directory does not exist".to_string(),
+        ));
+    }
+
+    if !path.is_dir() {
+        debug!(path = %params.path, "Path is not a directory");
+        return Err(HandlerError::DirectoryError(
+            "Path is not a directory".to_string(),
+        ));
+    }
+
+    let entries = fs::read_dir(path).map_err(|e| {
+        debug!(path = %params.path, error = %e, "Failed to read directory");
+        HandlerError::IoError(e)
+    })?;
+
+    let mut files = Vec::new();
+    let mut directories = Vec::new();
+
+    for entry in entries {
+        let entry = entry.map_err(|e| {
+            debug!(path = %params.path, error = %e, "Failed to read directory entry");
+            HandlerError::IoError(e)
+        })?;
+
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        if path.is_dir() {
+            directories.push(serde_json::json!({
+                "name": name,
+                "type": "directory"
+            }));
+        } else {
+            let metadata = entry.metadata().map_err(|e| {
+                debug!(path = %path.display(), error = %e, "Failed to read file metadata");
+                HandlerError::IoError(e)
+            })?;
+
+            files.push(serde_json::json!({
+                "name": name,
+                "type": "file",
+                "size": metadata.len()
+            }));
+        }
+    }
+
+    // Sort directories first, then files, both alphabetically
+    directories.sort_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()));
+    files.sort_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()));
+
+    let mut result = directories;
+    result.extend(files);
+
+    info!(
+        path = %params.path,
+        total_items = result.len(),
+        "Directory listing completed successfully"
+    );
+
+    Ok(Value::Array(result))
 }

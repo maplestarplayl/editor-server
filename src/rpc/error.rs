@@ -33,3 +33,4 @@ pub const INTERNAL_ERROR_CODE: i32 = -32603;
 // Application-specific error codes
 pub const FILE_NOT_FOUND_CODE: i32 = -32001;
 pub const IO_ERROR_CODE: i32 = -32002;
+pub const DIRECTORY_ERROR_CODE: i32 = -32003;
